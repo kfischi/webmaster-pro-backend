@@ -1,0 +1,320 @@
+// prisma/schema.prisma - WebMaster Pro Database Schema
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 👤 Users Table
+model User {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  name        String
+  phone       String?
+  avatar      String?
+  plan        Plan     @default(FREE)
+  status      UserStatus @default(ACTIVE)
+  
+  // Authentication
+  passwordHash String?
+  emailVerified Boolean @default(false)
+  emailVerificationToken String?
+  passwordResetToken String?
+  passwordResetExpires DateTime?
+  
+  // Subscription
+  subscriptionId String?
+  subscriptionStatus String?
+  subscriptionEnds DateTime?
+  
+  // Relations
+  websites    Website[]
+  payments    Payment[]
+  templates   UserTemplate[]
+  aiRequests  AIRequest[]
+  
+  // Metadata
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  lastLogin   DateTime?
+  
+  @@map("users")
+}
+
+// 🌐 Websites Table
+model Website {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  domain      String?  @unique
+  subdomain   String?  @unique
+  
+  // Template & Design
+  templateId  String
+  template    Template @relation(fields: [templateId], references: [id])
+  customCSS   String?
+  customJS    String?
+  
+  // Content
+  content     Json     // Stores all website content as JSON
+  metadata    Json?    // SEO metadata, settings, etc.
+  
+  // Status
+  status      WebsiteStatus @default(DRAFT)
+  published   Boolean  @default(false)
+  publishedAt DateTime?
+  
+  // Owner
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Analytics
+  views       Int      @default(0)
+  lastViewed  DateTime?
+  
+  // Metadata
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("websites")
+}
+
+// 🎨 Templates Table
+model Template {
+  id          String   @id @default(cuid())
+  name        String
+  description String
+  category    String
+  
+  // Template Data
+  preview     String   // Preview image URL
+  demoUrl     String?  // Demo website URL
+  code        Json     // HTML/CSS/JS template code
+  
+  // Pricing
+  price       Int      // Price in agorot (cents)
+  featured    Boolean  @default(false)
+  
+  // Features
+  features    String[] // Array of feature names
+  tags        String[] // Array of tags
+  
+  // Usage
+  usageCount  Int      @default(0)
+  rating      Float    @default(0.0)
+  
+  // Relations
+  websites    Website[]
+  userTemplates UserTemplate[]
+  
+  // Metadata
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("templates")
+}
+
+// 👤🎨 User Templates (Purchased/Customized)
+model UserTemplate {
+  id          String   @id @default(cuid())
+  
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  templateId  String
+  template    Template @relation(fields: [templateId], references: [id])
+  
+  // Customizations
+  customizations Json? // User's custom modifications
+  
+  // Purchase Info
+  purchaseDate DateTime @default(now())
+  purchasePrice Int    // Price paid in agorot
+  
+  @@unique([userId, templateId])
+  @@map("user_templates")
+}
+
+// 🤖 AI Requests Table
+model AIRequest {
+  id          String   @id @default(cuid())
+  
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Request Details
+  type        AIRequestType
+  prompt      String
+  response    Json     // AI generated response
+  
+  // Usage Tracking
+  tokensUsed  Int      @default(0)
+  cost        Int      @default(0) // Cost in agorot
+  
+  // Status
+  status      AIRequestStatus @default(COMPLETED)
+  errorMessage String?
+  
+  // Metadata
+  createdAt   DateTime @default(now())
+  
+  @@map("ai_requests")
+}
+
+// 💳 Payments Table
+model Payment {
+  id          String   @id @default(cuid())
+  
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Payment Details
+  amount      Int      // Amount in agorot
+  currency    String   @default("ILS")
+  description String
+  
+  // Payment Method
+  method      PaymentMethod
+  transactionId String @unique
+  
+  // Status
+  status      PaymentStatus @default(PENDING)
+  paidAt      DateTime?
+  
+  // Invoice
+  invoiceUrl  String?
+  invoiceNumber String?
+  
+  // Metadata
+  metadata    Json?    // Additional payment data
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("payments")
+}
+
+// 📊 Analytics Table
+model Analytics {
+  id          String   @id @default(cuid())
+  
+  websiteId   String
+  
+  // Traffic Data
+  date        DateTime @default(now())
+  pageViews   Int      @default(0)
+  uniqueVisitors Int   @default(0)
+  bounceRate  Float?
+  avgSessionDuration Int? // in seconds
+  
+  // Geographic Data
+  country     String?
+  city        String?
+  
+  // Technical Data
+  device      String?  // mobile, desktop, tablet
+  browser     String?
+  os          String?
+  
+  // Referrer Data
+  referrer    String?
+  utm_source  String?
+  utm_medium  String?
+  utm_campaign String?
+  
+  @@map("analytics")
+}
+
+// 📧 Email Campaign Table
+model EmailCampaign {
+  id          String   @id @default(cuid())
+  
+  userId      String
+  
+  // Campaign Details
+  name        String
+  subject     String
+  content     String
+  
+  // Recipients
+  recipients  String[] // Array of email addresses
+  
+  // Status
+  status      EmailStatus @default(DRAFT)
+  sentAt      DateTime?
+  
+  // Stats
+  sentCount   Int      @default(0)
+  openedCount Int      @default(0)
+  clickedCount Int     @default(0)
+  
+  // Metadata
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("email_campaigns")
+}
+
+// 🔧 Enums
+enum Plan {
+  FREE
+  BASIC
+  PREMIUM
+  ENTERPRISE
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  DELETED
+}
+
+enum WebsiteStatus {
+  DRAFT
+  PREVIEW
+  PUBLISHED
+  ARCHIVED
+}
+
+enum AIRequestType {
+  CONTENT_GENERATION
+  SEO_OPTIMIZATION
+  DESIGN_SUGGESTION
+  CHAT_ASSISTANT
+  CODE_GENERATION
+}
+
+enum AIRequestStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum PaymentMethod {
+  CREDIT_CARD
+  BANK_TRANSFER
+  PAYPAL
+  BIT
+  APPLE_PAY
+  GOOGLE_PAY
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum EmailStatus {
+  DRAFT
+  SCHEDULED
+  SENDING
+  SENT
+  FAILED
+}
